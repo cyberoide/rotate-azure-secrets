@@ -1,69 +1,69 @@
-name: Key Vault Secret Rotation
+# name: Key Vault Secret Rotation
 
-on:
-  schedule:
-    - cron: '0 0 * * *' # Runs daily at midnight
+# on:
+#   schedule:
+#     - cron: '0 0 * * *' # Runs daily at midnight
 
-jobs:
-  rotate-secrets:
-    runs-on: ubuntu-latest
+# jobs:
+#   rotate-secrets:
+#     runs-on: ubuntu-latest
 
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
+#     steps:
+#     - name: Checkout repository
+#       uses: actions/checkout@v2
 
-    - name: Set up Azure CLI
-      uses: azure/setup-cli@v1
+#     - name: Set up Azure CLI
+#       uses: azure/setup-cli@v1
 
-    - name: Log in to Azure
-      env:
-        AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-        AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
-        AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-      run: |
-        echo "Logging in to Azure..."
-        az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
+#     - name: Log in to Azure
+#       env:
+#         AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+#         AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+#         AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+#       run: |
+#         echo "Logging in to Azure..."
+#         az login --service-principal -u $AZURE_CLIENT_ID -p $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
 
-    - name: Get secrets from Key Vault
-      id: get_secrets
-      run: |
-        echo "Fetching secrets from Key Vault..."
-        secrets=$(az keyvault secret list --vault-name ${{ secrets.AZURE_VAULT_NAME }} --query "[].{name:name, id:id, created:attributes.created}" -o json)
-        echo "Secrets fetched."
-        echo "::set-output name=secrets::$secrets"
+#     - name: Get secrets from Key Vault
+#       id: get_secrets
+#       run: |
+#         echo "Fetching secrets from Key Vault..."
+#         secrets=$(az keyvault secret list --vault-name ${{ secrets.AZURE_VAULT_NAME }} --query "[].{name:name, id:id, created:attributes.created}" -o json)
+#         echo "Secrets fetched."
+#         echo "::set-output name=secrets::$secrets"
 
-    - name: Rotate old secrets
-      id: rotate_secrets
-      run: |
-        echo "Checking and rotating secrets..."
-        current_date=$(date +%s)
-        rotated_keys=()
+#     - name: Rotate old secrets
+#       id: rotate_secrets
+#       run: |
+#         echo "Checking and rotating secrets..."
+#         current_date=$(date +%s)
+#         rotated_keys=()
         
-        for row in $(echo "${{ steps.get_secrets.outputs.secrets }}" | jq -c '.[]'); do
-          secret_name=$(echo "$row" | jq -r '.name')
-          created_timestamp=$(echo "$row" | jq -r '.created')
-          age_days=$(( (current_date - created_timestamp) / 86400 ))
+#         for row in $(echo "${{ steps.get_secrets.outputs.secrets }}" | jq -c '.[]'); do
+#           secret_name=$(echo "$row" | jq -r '.name')
+#           created_timestamp=$(echo "$row" | jq -r '.created')
+#           age_days=$(( (current_date - created_timestamp) / 86400 ))
 
-          if [ "$age_days" -gt 90 ]; then
-            echo "Rotating secret: $secret_name (Age: $age_days days)"
-            # Fetch the current secret value
-            current_value=$(az keyvault secret show --name "$secret_name" --vault-name ${{ secrets.AZURE_VAULT_NAME }} --query value -o tsv)
-            # Rotate the secret (here we're just appending 'new' to the current value for demonstration)
-            new_value="${current_value}-new"
-            az keyvault secret set --name "$secret_name" --vault-name ${{ secrets.AZURE_VAULT_NAME }} --value "$new_value"
-            rotated_keys+=("$secret_name")
-          fi
-        done
+#           if [ "$age_days" -gt 90 ]; then
+#             echo "Rotating secret: $secret_name (Age: $age_days days)"
+#             # Fetch the current secret value
+#             current_value=$(az keyvault secret show --name "$secret_name" --vault-name ${{ secrets.AZURE_VAULT_NAME }} --query value -o tsv)
+#             # Rotate the secret (here we're just appending 'new' to the current value for demonstration)
+#             new_value="${current_value}-new"
+#             az keyvault secret set --name "$secret_name" --vault-name ${{ secrets.AZURE_VAULT_NAME }} --value "$new_value"
+#             rotated_keys+=("$secret_name")
+#           fi
+#         done
         
-        if [ ${#rotated_keys[@]} -eq 0 ]; then
-          echo "No secrets were rotated."
-        else
-          echo "Rotated keys: ${rotated_keys[*]}"
-        fi
+#         if [ ${#rotated_keys[@]} -eq 0 ]; then
+#           echo "No secrets were rotated."
+#         else
+#           echo "Rotated keys: ${rotated_keys[*]}"
+#         fi
 
-        # Set the output variable
-        echo "::set-output name=rotated_keys::${rotated_keys[*]}"
+#         # Set the output variable
+#         echo "::set-output name=rotated_keys::${rotated_keys[*]}"
       
-    - name: Output rotated keys
-      run: |
-        echo "Rotated keys: ${{ steps.rotate_secrets.outputs.rotated_keys }}"
+#     - name: Output rotated keys
+#       run: |
+#         echo "Rotated keys: ${{ steps.rotate_secrets.outputs.rotated_keys }}"
